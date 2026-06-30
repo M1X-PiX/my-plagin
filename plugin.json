@@ -1,0 +1,6 @@
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "download": "http://localhost:3000/dist.zip"  
+}

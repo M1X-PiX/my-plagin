@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Отладка в Chrome",
+      "url": "http://localhost:8080",
+      "webRoot": "${workspaceFolder}",
+      "runtimeExecutable": "C:/ProgramData/Microsoft/Windows/Start Menu/Programs/Google Chrome.lnk",
+      "sourceMaps": true
+    }
+  ]
+}
