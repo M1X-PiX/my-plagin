@@ -500,7 +500,7 @@ export default {
         ctx.showMessage(`Готово: ${vertices.length} точек`);
     },
  
-    // Пересечение двух полилиний — заливается зелёным
+    // Пересечение 
     showIntersection: (ctx: Context): Promise<void> => runBooleanOp(ctx, "intersection"),
     // Объединение 
     showUnion: (ctx: Context): Promise<void> => runBooleanOp(ctx, "union"),
