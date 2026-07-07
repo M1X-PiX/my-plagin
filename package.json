@@ -9,7 +9,7 @@
     "build": "albatros-cli build"
   },
   "devDependencies": {
-    "albatros": "^1.4.2",
+    "albatros": "^1.4.1",
     "typescript": "^6.0.3"
   },
   "albatros": {
@@ -18,15 +18,37 @@
         "label": "Приветствие",
         "cmd": "hello",
         "description": "Выводит приветствие в панель сообщений"
+      },
+      "draw_user_line_action": {
+        "label": "Нарисовать полилинию ",
+        "cmd": "drawUserLine",
+        "description": "Рисуем  полилинию "
+      },
+      "showIntersection_action": {
+      "label": "Показать пересечение",
+      "cmd": "showIntersection",
+      "description": "Автоматическое построение сечения по текущему виду"
+      },
+      "showUnion_action": {
+      "label": "Показать обьединение",
+      "cmd": "showUnion",
+      "description": "Автоматическое построение сечения по текущему виду"
+    },
+    "show_difference": {
+        "label": "Разность",
+        "cmd": "showDifference",
+        "description": "Разность"
       }
     },
     "menu": [
       {
         "label": "Мой плагин",
         "submenu": [
-          {
-            "action": "hello_action"
-          }
+          { "action": "hello_action" },
+          { "action": "draw_user_line_action"},
+          { "action": "showIntersection_action"},
+          { "action": "showUnion_action"},
+          { "action": "show_difference"}
         ]
       }
     ]
