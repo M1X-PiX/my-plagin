@@ -46,8 +46,8 @@ function signedArea(poly: Vec2[]): number {
 function ensureCCW(poly: Vec2[]): Vec2[] {
     return signedArea(poly) < 0 ? [...poly].reverse() : poly.slice();
 }
-
-
+ 
+ 
 // Пускаем луч вправо и считаем пересечения с рёбрами
 // Если нечётное количество пересечений — точка внутри
 function pointInPolygon(p: Vec2, poly: Vec2[]): boolean {
@@ -122,11 +122,49 @@ function clipAgainstOrientedConvex(subject: Vec2[], orientedClip: Vec2[]): Vec2[
 function intersectConvex(subject: Vec2[], clip: Vec2[]): Vec2[] {
     return clipAgainstOrientedConvex(subject, ensureCCW(clip));
 }
-
-/* Разность  */
-function subtractConvex(subject: Vec2[], clip: Vec2[]): Vec2[] {
-    const reversedClip = ensureCCW(clip).slice().reverse();
-    return clipAgainstOrientedConvex(subject, reversedClip);
+ 
+// Отсекаем subject по ОДНОМУ ребру a->b, оставляя часть СНАРУЖИ этого ребра
+// (обычный Sutherland-Hodgman, только тест "внутри" развёрнут на противоположный)
+function clipOutsideSingleEdge(subject: Vec2[], a: Vec2, b: Vec2): Vec2[] {
+    const isOutside = (p: Vec2) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) < 0;
+ 
+    const output: Vec2[] = [];
+    for (let j = 0; j < subject.length; j++) {
+        const current = subject[j]!;
+        const prev = subject[(j - 1 + subject.length) % subject.length]!;
+        const currentOutside = isOutside(current);
+        const prevOutside = isOutside(prev);
+ 
+        if (currentOutside) {
+            if (!prevOutside) output.push(lineIntersection(prev, current, a, b));
+            output.push(current);
+        } else if (prevOutside) {
+            output.push(lineIntersection(prev, current, a, b));
+        }
+    }
+    return output;
+}
+ 
+/*
+ * Разность subject \ clip (clip выпуклый).
+ * По правилу де Моргана "снаружи выпуклого clip" — это ОБЪЕДИНЕНИЕ областей
+ * "снаружи каждого отдельного ребра clip", а не пересечение (одно общее AND-отсечение
+ * по всем рёбрам сразу почти всегда даёт пустоту — снаружи одного ребра обычно
+ * означает "внутри" противоположного, и такая точка не проходит все проверки разом).
+ * Поэтому отсекаем subject по каждому ребру clip отдельно и собираем все куски.
+ */
+function subtractConvex(subject: Vec2[], clip: Vec2[]): Vec2[][] {
+    const orientedClip = ensureCCW(clip);
+    const pieces: Vec2[][] = [];
+ 
+    for (let i = 0; i < orientedClip.length; i++) {
+        const a = orientedClip[i]!;
+        const b = orientedClip[(i + 1) % orientedClip.length]!;
+        const piece = clipOutsideSingleEdge(subject, a, b);
+        if (piece.length >= 3) pieces.push(piece);
+    }
+ 
+    return pieces;
 }
  
 /* Триангуляция готового контура */
@@ -358,14 +396,24 @@ async function fillTrianglesForBooleanOp(
     poly2: Vec2[]
 ): Promise<void> {
     const label = MODE_LABEL[mode];
-    const resultPoly = mode === "intersection" ? intersectConvex(poly1, poly2) : subtractConvex(poly1, poly2);
  
-    if (resultPoly.length < 3) {
+    // Пересечение — всегда один контур (или пусто).
+    // Разность — может состоять из нескольких кусков (по числу рёбер clip), поэтому
+    // работаем с массивом контуров в обоих случаях.
+    const resultPolys: Vec2[][] =
+        mode === "intersection"
+            ? (() => {
+                  const poly = intersectConvex(poly1, poly2);
+                  return poly.length >= 3 ? [poly] : [];
+              })()
+            : subtractConvex(poly1, poly2);
+ 
+    if (resultPolys.length === 0) {
         ctx.showMessage(`Область ${label} не найдена`, "warning");
         return;
     }
  
-    const triangles = triangulatePolygon(resultPoly);
+    const triangles = resultPolys.flatMap(triangulatePolygon);
     if (triangles.length === 0) {
         ctx.showMessage(`Область ${label} не найдена`, "warning");
         return;
