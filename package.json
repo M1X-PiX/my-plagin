@@ -19,25 +19,71 @@
         "cmd": "hello",
         "description": "Выводит приветствие в панель сообщений"
       },
-      "draw_user_line_action": {
-        "label": "Нарисовать полилинию ",
+      "draw_user_section_action": {
+        "label": "Нарисовать отрезок",
+        "cmd": "drawSegment",
+        "description": "Рисуем отрезок по двум точкам"
+      },
+      "draw_user_ray_action": {
+        "label": "Нарисовать луч",
+        "cmd": "drawRay",
+        "description": "Рисуем отрезок по двум точкам"
+      },
+      "draw_user_StraightLine_action": {
+        "label": "Нарисовать прямая",
+        "cmd": "drawStraightLine",
+        "description": "Рисуем отрезок по двум точкам"
+      },
+      "draw_user_polyline_action": {
+        "label": "Нарисовать полилинию",
         "cmd": "drawUserLine",
-        "description": "Рисуем  полилинию "
+        "description": "Интерактивное рисование полилинии с углом"
+      },
+      "draw_arc_action": {
+        "label": "Нарисовать дугу",
+        "cmd": "drawArc",
+        "description": "Дуга по центру, начальной и конечной точке"
+      },
+      "draw_polygon_action": {
+        "label": "Нарисовать многоугольник",
+        "cmd": "drawN",
+        "description": "Правильный N-угольник: число сторон, тип, центр, радиус"
+      },
+      "draw_rectangle_action": {
+        "label": "Нарисовать прямоугольник",
+        "cmd": "drawRectangle",
+        "description": "Прямоугольник по двум противоположным углам"
       },
       "showIntersection_action": {
-      "label": "Показать пересечение",
-      "cmd": "showIntersection",
-      "description": "Автоматическое построение сечения по текущему виду"
+        "label": "Показать пересечение",
+        "cmd": "showIntersection",
+        "description": "Закрашивает область пересечения двух полилиний"
       },
       "showUnion_action": {
-      "label": "Показать обьединение",
-      "cmd": "showUnion",
-      "description": "Автоматическое построение сечения по текущему виду"
-    },
-    "show_difference": {
+        "label": "Показать объединение",
+        "cmd": "showUnion",
+        "description": "Создает полилинию объединения двух контуров"
+      },
+      "show_difference": {
         "label": "Разность",
         "cmd": "showDifference",
-        "description": "Разность"
+        "description": "Вычитает одну область из другой"
+      }
+    },
+    "statusbar": {
+      "mouse_coords": {
+        "name": "Координаты",
+        "alignment": "left",
+        "label": "X: $(fix,$(index,$(ru.albatros.core/cadview:position),0),2)  Y: $(fix,$(index,$(ru.albatros.core/cadview:position),1),2)",
+        "priority": 110,
+        "flags": "$(if,$(app),0,2)"
+      },
+      "polyline_info": {
+        "name": "Инфо полилинии",
+        "alignment": "left",
+        "label": "$(get_polyline_status)",
+        "priority": 105,
+        "flags": "$(if,$(app),0,2)"
       }
     },
     "menu": [
@@ -45,10 +91,17 @@
         "label": "Мой плагин",
         "submenu": [
           { "action": "hello_action" },
-          { "action": "draw_user_line_action"},
-          { "action": "showIntersection_action"},
-          { "action": "showUnion_action"},
-          { "action": "show_difference"}
+          { "action": "draw_user_section_action" },
+          { "action": "draw_user_ray_action" },
+          { "action": "draw_user_StraightLine_action" },
+          { "action": "draw_user_polyline_action" },
+          { "action": "draw_arc_action" },
+          { "action": "draw_polygon_action" },
+          { "action": "draw_rectangle_action" },
+          { "tag": "s" },
+          { "action": "showIntersection_action" },
+          { "action": "showUnion_action" },
+          { "action": "show_difference" }
         ]
       }
     ]
