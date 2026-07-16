@@ -1,11 +1,7 @@
 import { DwgType } from "albatros/enums";
 
-// Простое module-level состояние для статус-бара. package.json теперь читает его
-// напрямую через DIESEL: statusbar.polyline_info -> "label": "$(get_polyline_status)"
-// (dynamics для этого не нужны — это механизм для выпадающих списков, не для текста).
 const liveStatus = { text: "" };
 
-// vec2 и vec3 — уже объявлены глобально в библиотеке (math_d.ts), свои не нужны
 type Triangle = [vec2, vec2, vec2];
 
 function unwrap(obj: any): any {
@@ -156,7 +152,6 @@ function intersectConvex(subject: vec2[], clip: vec2[]): vec2[] {
 }
 
 // Отсекаем subject по ОДНОМУ ребру a->b, оставляя часть СНАРУЖИ этого ребра
-// (обычный Sutherland-Hodgman, только тест "внутри" развёрнут на противоположный)
 function clipOutsideSingleEdge(subject: vec2[], a: vec2, b: vec2): vec2[] {
     const isOutside = (p: vec2) => edgeSide(a, b, p) < 0;
 
@@ -178,12 +173,8 @@ function clipOutsideSingleEdge(subject: vec2[], a: vec2, b: vec2): vec2[] {
 }
 
 /*
- * Разность subject \ clip (clip выпуклый).
- * По правилу де Моргана "снаружи выпуклого clip" — это ОБЪЕДИНЕНИЕ областей
- * "снаружи каждого отдельного ребра clip", а не пересечение (одно общее AND-отсечение
- * по всем рёбрам сразу почти всегда даёт пустоту — снаружи одного ребра обычно
- * означает "внутри" противоположного, и такая точка не проходит все проверки разом).
- * Поэтому отсекаем subject по каждому ребру clip отдельно и собираем все куски.
+Разность subject \ clip (clip выпуклый).
+ отсекаем subject по каждому ребру clip отдельно и собираем все куски.
  */
 function subtractConvex(subject: vec2[], clip: vec2[]): vec2[][] {
     const orientedClip = ensureCCW(clip);
@@ -526,16 +517,14 @@ async function runBooleanOp(ctx: Context, mode: BooleanMode): Promise<void> {
     }
 }
 
-// --- Общие хелперы: резинка, угол/длина, статус-бар ---
-
-// Угол вектора start->cursor в радианах — нужен для editor.addArc и dc.arcto (там всё в радианах)
+// Угол вектора 
 function angleRad(from: vec3, to: vec3): number {
     const dir: vec2 = [0, 0];
     Math3d.vec2.sub(dir, [to[0], to[1]], [from[0], from[1]]);
     return Math3d.vec2.angle(dir);
 }
 
-// Угол вектора start->cursor в градусах от горизонтали, 0..360
+// Угол вектора start->cursor в градусах от горизонт
 function angleFromHorizontal(start: vec3, cursor: vec3): number {
     let deg = (angleRad(start, cursor) * 180) / Math.PI;
     if (deg < 0) deg += 360;
@@ -546,8 +535,7 @@ function distance2D(start: vec3, cursor: vec3): number {
     return Math3d.vec2.distance([start[0], start[1]], [cursor[0], cursor[1]]);
 }
 
-// Обновляем статус-бар только когда текст реально изменился — иначе dispose()+create
-// на каждый кадр (60/сек) не успевает отрисоваться.
+
 function createStatusUpdater(ctx: Context) {
     let current: IDisposable | undefined;
     let lastText: string | undefined;
@@ -578,7 +566,6 @@ function makeLengthAngleHandler(
     const handler: DynamicCallback = (dc, _camera, cursor) => {
         const length = distance2D(start, cursor);
         const angleDegNormalized = angleFromHorizontal(start, cursor);
-        const angleRadRaw = angleRad(start, cursor); // может быть отрицательным — для arcto это ок (направление дуги)
         last = { length, angleDeg: angleDegNormalized };
 
         const text = `Длина: ${length.toFixed(2)}   Угол: ${angleDegNormalized.toFixed(1)}°`;
@@ -597,18 +584,12 @@ function makeLengthAngleHandler(
         dc.newpath([start[0], start[1]]);
         dc.lineto([start[0] + refLength, start[1]]);
         dc.stroke(1);
-
-        // дуга угла между горизонталью и текущим направлением
-        const arcRadius = Math.min(refLength * 0.3, 20) || 5;
-        dc.color = 0x0000ffff;
-        dc.arcto([start[0], start[1]], arcRadius, 0, angleRadRaw);
-        dc.stroke(1);
     };
 
     return { handler, getLast: () => last };
 }
 
-// Рисует контур по отдельным отрезкам (не одним длинным путём) — так надёжнее рисуется.
+// Рисует контур по отдельным отрезкам 
 function strokePolylinePreview(dc: DeviceContext, points: vec2[], closed: boolean, color: number): void {
     const edgeCount = closed ? points.length : points.length - 1;
     for (let i = 0; i < edgeCount; i++) {
@@ -646,7 +627,7 @@ function refresh(cadview: any): void {
     cadview.repaint();
 }
 
-/** Спросить номер цвета ACI (1-255) через простое окно ввода. undefined — если отменили. */
+/** Спросить номер цвета */
 async function askAciColor(ctx: Context, current: number): Promise<number | undefined> {
     const input = await ctx.showInputBox({
         title: "Цвет линии",
@@ -673,7 +654,6 @@ function computeRegularPolygon(
     const cy = center[1];
 
     // Для описанного многоугольника radius — расстояние до середины стороны,
-    // а не до вершины, поэтому вершины чуть дальше (R = radius / cos(pi/sides)).
     const R = circumscribed ? radius / Math.cos(Math.PI / sides) : radius;
 
     const vertices: vec2[] = [];
@@ -684,13 +664,10 @@ function computeRegularPolygon(
     return vertices;
 }
 
-// Отрезок/луч/прямая — одна логика, рисуются цепочкой. Луч и прямая — это Line,
-// далеко вытянутый в нужную сторону (отдельного типа сущности для них нет).
+
 type LinearMode = "segment" | "ray" | "xline";
 
 // Длина, на которую "тянем" луч/прямую — берём от размера текущего вида камеры
-// (через ViewFrustum.box), чтобы линия гарантированно выходила за пределы экрана
-// независимо от масштаба чертежа. Если по какой-то причине не получилось — запасное значение.
 function computeFarDistance(cadview: any): number {
     try {
         const box: box3 = [0, 0, 0, 0, 0, 0];
@@ -733,9 +710,9 @@ async function drawLinear(ctx: Context, mode: LinearMode): Promise<void> {
     liveStatus.text = "";
     const statusUpdater = createStatusUpdater(ctx);
 
-    const defaultColor = 7; // белый по умолчанию для всех линий (можно сменить через меню)
+    const defaultColor = 7; // белый 
     let color = defaultColor;
-    const farDistance = computeFarDistance(cadview); // для ray/xline — длина "вытягивания" линии
+    const farDistance = computeFarDistance(cadview); 
 
     const createdEntities: { entity: any; marker?: any }[] = [];
     const chainPoints: vec3[] = []; // p1 каждого созданного элемента, для "замкнуть"
@@ -858,6 +835,72 @@ async function drawLinear(ctx: Context, mode: LinearMode): Promise<void> {
     ctx.showMessage(`${noun} создано: ${createdEntities.length}`);
 }
 
+// Круг через 3 точки (start, through, end) — нужен для дуговых кусков полилинии:
+// выбираем ту из двух дуг окружности, что реально проходит через through-точку.
+function circumcircle(p1: vec2, p2: vec2, p3: vec2): { center: vec2; radius: number } | null {
+    const [ax, ay] = p1, [bx, by] = p2, [cx, cy] = p3;
+    const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+    if (Math.abs(d) < 1e-9) return null; // точки на одной прямой
+    const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
+    const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
+    const center: vec2 = [ux, uy];
+    return { center, radius: Math3d.vec2.distance(center, p1) };
+}
+
+function arcThrough3Points(
+    start: vec3, through: vec3, end: vec3
+): { center: vec3; radius: number; angle: number; span: number } | null {
+    const circle = circumcircle([start[0], start[1]], [through[0], through[1]], [end[0], end[1]]);
+    if (!circle) return null;
+
+    const angleAt = (p: vec2) => Math.atan2(p[1] - circle.center[1], p[0] - circle.center[0]);
+    const norm = (a: number) => (a < 0 ? a + Math.PI * 2 : a);
+
+    const a0 = norm(angleAt([start[0], start[1]]));
+    const aT = norm(angleAt([through[0], through[1]]));
+    const a1 = norm(angleAt([end[0], end[1]]));
+
+    let spanCCW = a1 - a0;
+    if (spanCCW < 0) spanCCW += Math.PI * 2;
+
+    let throughOffset = aT - a0;
+    if (throughOffset < 0) throughOffset += Math.PI * 2;
+
+    // Если through-точка не попадает в дугу "против часовой" от start до end — значит,
+    // нужная дуга идёт по часовой (отрицательный span).
+    const span = throughOffset <= spanCCW ? spanCCW : spanCCW - Math.PI * 2;
+
+    return { center: [circle.center[0], circle.center[1], 0], radius: circle.radius, angle: a0, span };
+}
+
+// Сглаженная кривая через опорные точки (Catmull-Rom), т.к. настоящего типа
+// "сплайн" в этой версии API не подтверждено (только line/circle/arc/polyline/...).
+// Итог создаётся как Polyline из множества мелких отрезков — визуально гладкая
+// кривая, но технически не NURBS-сплайн.
+function catmullRomPoint(p0: vec2, p1: vec2, p2: vec2, p3: vec2, t: number): vec2 {
+    const t2 = t * t, t3 = t2 * t;
+    const x = 0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+    const y = 0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+    return [x, y];
+}
+
+function sampleSmoothCurve(points: vec2[], samplesPerSegment = 16): vec2[] {
+    if (points.length < 3) return points.slice();
+    const n = points.length;
+    const result: vec2[] = [];
+    for (let i = 0; i < n - 1; i++) {
+        const p0 = points[Math.max(i - 1, 0)]!;
+        const p1 = points[i]!;
+        const p2 = points[i + 1]!;
+        const p3 = points[Math.min(i + 2, n - 1)]!;
+        for (let s = 0; s < samplesPerSegment; s++) {
+            result.push(catmullRomPoint(p0, p1, p2, p3, s / samplesPerSegment));
+        }
+    }
+    result.push(points[n - 1]!);
+    return result;
+}
+
 export default {
     hello: (ctx: Context): void => {
         ctx.showMessage("Плагин загружен");
@@ -870,8 +913,6 @@ export default {
     // Отрезок(ы) — можно рисовать цепочкой, ПКМ открывает меню
     drawSegment: (ctx: Context): Promise<void> => drawLinear(ctx, "segment"),
 
-    // Луч — визуально реализован как Line, вытянутый далеко в одном направлении
-    // (в этой версии API нет подтверждённого отдельного типа сущности "луч")
     drawRay: (ctx: Context): Promise<void> => drawLinear(ctx, "ray"),
 
     // Прямая — Line, вытянутый далеко в обе стороны через первую точку
@@ -912,8 +953,6 @@ export default {
         const startAngleRad = angleRad(center, startPoint);
         ctx.showMessage(`Радиус: ${radius.toFixed(3)}`);
 
-        // Динамический предпросмотр: сама дуга через dc.arcto, плюс линия к курсору,
-        // плюс "живой" радиус/угол раствора дуги в статус-баре (change-gated).
         const previewArc: DynamicCallback = (dc, _camera, cursor) => {
             const cursorAngleRad = angleRad(center, cursor);
             let span = cursorAngleRad - startAngleRad;
@@ -1015,7 +1054,6 @@ export default {
                 liveStatus.text = text;
                 polygonStatus.update(text);
             } catch (e) {
-                // Если сюда попали — резинка ломается именно здесь. Смотрите текст ошибки в консоли.
                 console.error("[drawN] Ошибка в предпросмотре многоугольника:", e);
             }
         };
@@ -1053,6 +1091,59 @@ export default {
         liveStatus.text = "";
         const typeText = isCircumscribed ? "описанный" : "вписанный";
         ctx.showMessage(`${sides}-угольник (${typeText}) создан, ${vertices.length} вершин`);
+    },
+
+    // Круг по центру и радиусу
+    drawCircle: async (ctx: Context): Promise<void> => {
+        const { cadview, editor } = getEditorAndCadview(ctx);
+        if (!cadview || !editor) {
+            ctx.showMessage("Нет доступа к редактору", "warning");
+            return;
+        }
+
+        liveStatus.text = "";
+
+        const center = await cadview.getpoint("Центр круга");
+        if (typeof center === "string") {
+            ctx.showMessage("Отменено", "warning");
+            return;
+        }
+
+        const circleStatus = createStatusUpdater(ctx);
+        circleStatus.update("Радиус: 0.000");
+
+        const previewCircle: DynamicCallback = (dc, _camera, cursor) => {
+            const radius = distance2D(center, cursor);
+            dc.color = 0xff0000ff; // красная резинка
+            dc.arcto([center[0], center[1]], radius, 0, Math.PI * 2);
+            dc.stroke(2);
+
+            const text = `Радиус: ${radius.toFixed(3)}`;
+            liveStatus.text = text;
+            circleStatus.update(text);
+        };
+
+        const radiusPoint = await cadview.getpoint(
+            "Радиус круга",
+            { cancel: "Отмена" },
+            undefined,
+            previewCircle
+        );
+        if (typeof radiusPoint === "string") {
+            circleStatus.dispose();
+            liveStatus.text = "";
+            ctx.showMessage("Отменено", "warning");
+            return;
+        }
+
+        const radius = distance2D(center, radiusPoint);
+
+        await withEdit(editor, () => editor.addCircle({ center, radius, color: 7 }));
+        refresh(cadview);
+
+        circleStatus.dispose();
+        liveStatus.text = "";
+        ctx.showMessage(`Круг создан: радиус ${radius.toFixed(3)}`);
     },
 
     // Прямоугольник по двум противоположным углам (оси совпадают с осями чертежа)
@@ -1122,8 +1213,91 @@ export default {
         ctx.showMessage(`Прямоугольник создан: ${w.toFixed(3)} x ${h.toFixed(3)}`);
     },
 
-    // Полилиния с контекстным меню по ПКМ: отменить последнюю точку,
-    // замкнуть, изменить ширину/цвет. Плюс индикация длины/угла текущего сегмента.
+    // Сглаженная кривая (аппроксимация сплайна) через несколько опорных точек
+    drawSpline: async (ctx: Context): Promise<void> => {
+        const { cadview, editor } = getEditorAndCadview(ctx);
+        if (!cadview || !editor) {
+            ctx.showMessage("Нет доступа к редактору", "warning");
+            return;
+        }
+
+        liveStatus.text = "";
+
+        const controlPoints: vec3[] = [];
+        let previewEntity: any = undefined;
+
+        async function redraw(): Promise<void> {
+            await withEdit(editor, async () => {
+                if (previewEntity) {
+                    await previewEntity.erase();
+                    previewEntity = undefined;
+                }
+                if (controlPoints.length >= 2) {
+                    const sampled = sampleSmoothCurve(controlPoints.map(toVec2));
+                    const verts3d: vec3[] = sampled.map(([x, y]) => [x, y, 0]);
+                    previewEntity = await editor.addPolyline({ vertices: verts3d, flags: 0, color: 7, width: 0, elevation: 0 });
+                }
+            });
+            refresh(cadview);
+        }
+
+        const topStatus = createStatusUpdater(ctx);
+
+        try {
+            while (true) {
+                const basePoint = controlPoints.length > 0 ? controlPoints[controlPoints.length - 1] : undefined;
+                const lengthAngle = basePoint ? makeLengthAngleHandler(ctx, basePoint, topStatus) : undefined;
+                if (lengthAngle) topStatus.update("Длина: 0.00   Угол: 0.0°");
+
+                const alts: AlternativeCommands = {
+                    undo: "Отменить последнюю точку",
+                    exit: "Готово"
+                };
+
+                const result = await cadview.getpoint(
+                    controlPoints.length === 0 ? "Первая опорная точка сплайна" : "Следующая опорная точка (Enter — завершить)",
+                    alts,
+                    undefined,
+                    lengthAngle?.handler
+                );
+
+                if (result === "undo") { controlPoints.pop(); await redraw(); continue; }
+                if (result === "exit") break;
+                if (typeof result === "string" || !result) break; // Enter/Escape — завершение
+
+                controlPoints.push(result);
+                await redraw();
+            }
+        } catch (e) {
+            console.warn("Рисование сплайна прервано:", e);
+        }
+
+        topStatus.dispose();
+        liveStatus.text = "";
+
+        if (previewEntity) {
+            await withEdit(editor, () => previewEntity.erase());
+        }
+
+        if (controlPoints.length < 2) {
+            ctx.showMessage("Отменено", "warning");
+            return;
+        }
+
+        const sampled = sampleSmoothCurve(controlPoints.map(toVec2));
+        const verts3d: vec3[] = sampled.map(([x, y]) => [x, y, 0]);
+
+        await withEdit(editor, () =>
+            editor.addPolyline({ vertices: verts3d, flags: 0, color: 7, width: 0, elevation: 0 })
+        );
+        refresh(cadview);
+
+        ctx.showMessage(`Сплайн создан по ${controlPoints.length} опорным точкам`);
+    },
+
+    // Полилиния с меню по ПКМ
+    // переключение в режим дуги 
+    // Дуговые куски создаются отдельными сущностями 
     drawUserLine: async (ctx: Context): Promise<void> => {
         const { cadview, editor } = getEditorAndCadview(ctx);
         if (!cadview || !editor) {
@@ -1133,37 +1307,69 @@ export default {
 
         liveStatus.text = "";
 
-        const vertices: vec3[] = [];
+        let mode: "line" | "arc" = "line";
         let width = 0;
         let color = 7; // белый по умолчанию
-        let closed = false;
-        let exited = false;
-        let previewEntity: any = undefined; // текущая "превью" полилиния, чтобы не плодить копии
 
-        const alts: AlternativeCommands = {
-            undo: "Отменить последнюю точку",
-            close: "Замкнуть",
-            width: "Изменить ширину",
-            color: "Изменить цвет"
-        };
+        // Текущий несохранённый прямой кусок 
+        let lineVertices: vec3[] = [];
+        let previewEntity: any = undefined;
 
-        async function redrawPreview(): Promise<void> {
+        // Все уже созданные куски 
+        const committed: { entity: any; priorPoint: vec3 }[] = [];
+
+        const firstPoint = await cadview.getpoint("Первая точка полилинии");
+        if (typeof firstPoint === "string") {
+            ctx.showMessage("Отменено", "warning");
+            return;
+        }
+        lineVertices = [firstPoint];
+        let lastPoint = firstPoint;
+
+        async function redrawLinePreview(): Promise<void> {
             await withEdit(editor, async () => {
                 if (previewEntity) {
                     await previewEntity.erase();
                     previewEntity = undefined;
                 }
-                if (vertices.length >= 2) {
-                    previewEntity = await editor.addPolyline({
-                        vertices,
-                        flags: closed ? 1 : 0,
-                        color: 2,
-                        width,
-                        elevation: 0
-                    });
+                if (lineVertices.length >= 2) {
+                    previewEntity = await editor.addPolyline({ vertices: lineVertices, flags: 0, color, width, elevation: 0 });
                 }
             });
             refresh(cadview);
+        }
+
+        async function commitLinePiece(): Promise<void> {
+            if (lineVertices.length < 2) return;
+            const priorPoint = lineVertices[0]!;
+            if (previewEntity) {
+                await withEdit(editor, () => previewEntity.erase());
+                previewEntity = undefined;
+            }
+            const entity = await withEdit(editor, () =>
+                editor.addPolyline({ vertices: lineVertices, flags: 0, color, width, elevation: 0 })
+            );
+            refresh(cadview);
+            committed.push({ entity, priorPoint });
+            lineVertices = [lastPoint];
+        }
+
+        async function undoLast(): Promise<void> {
+            if (lineVertices.length > 1) {
+                lineVertices.pop();
+                lastPoint = lineVertices[lineVertices.length - 1]!;
+                await redrawLinePreview();
+                return;
+            }
+            const last = committed.pop();
+            if (!last) {
+                ctx.showMessage("Нечего отменять", "warning");
+                return;
+            }
+            await withEdit(editor, () => last.entity.erase());
+            refresh(cadview);
+            lastPoint = last.priorPoint;
+            lineVertices = [lastPoint];
         }
 
         async function askWidth(): Promise<void> {
@@ -1189,129 +1395,144 @@ export default {
             }
         }
 
+        async function askExactLengthAndAngle(currentLength: number, currentAngleDeg: number): Promise<void> {
+            const input = await ctx.showInputBox({
+                title: "Длина и угол сегмента",
+                prompt: `Формат: длина-угол (например: 100-45). Сейчас: ${currentLength.toFixed(3)} / ${currentAngleDeg.toFixed(1)}°`,
+                validateInput: (v) => {
+                    const parts = v.split("-");
+                    if (parts.length !== 2) return "Формат: длина-угол, например 100-45";
+                    if (isNaN(parseFloat(parts[0]!.trim()))) return "Длина должна быть числом";
+                    if (isNaN(parseFloat(parts[1]!.trim()))) return "Угол должен быть числом";
+                    return undefined;
+                }
+            });
+            if (input === undefined) return;
+
+            const parts = input.split("-");
+            const length = parseFloat(parts[0]!.trim());
+            const angleDeg = parseFloat(parts[1]!.trim());
+            if (isNaN(length) || isNaN(angleDeg)) return;
+
+            const rad = (angleDeg * Math.PI) / 180;
+            const newPoint: vec3 = [lastPoint[0] + length * Math.cos(rad), lastPoint[1] + length * Math.sin(rad), 0];
+            lineVertices.push(newPoint);
+            lastPoint = newPoint;
+            await redrawLinePreview();
+        }
+
         const topStatus = createStatusUpdater(ctx);
 
-        async function askExactLength(basePoint: vec3, currentAngleDeg: number): Promise<void> {
-            const input = await ctx.showInputBox({
-                title: "Точная длина сегмента",
-                prompt: `Направление сейчас: ${currentAngleDeg.toFixed(1)}° (по нему и ляжет точка)`,
-                validateInput: (v) => (isNaN(parseFloat(v)) ? "Введите число" : undefined)
-            });
-            if (input === undefined) return;
-            const length = parseFloat(input);
-            if (isNaN(length)) return;
-            const rad = (currentAngleDeg * Math.PI) / 180;
-            const newPoint: vec3 = [basePoint[0] + length * Math.cos(rad), basePoint[1] + length * Math.sin(rad), 0];
-            vertices.push(newPoint);
-            await redrawPreview();
-        }
-
-        async function askExactAngle(basePoint: vec3, currentLength: number): Promise<void> {
-            const input = await ctx.showInputBox({
-                title: "Точный угол сегмента",
-                prompt: `Длина сейчас: ${currentLength.toFixed(3)} (с ней и ляжет точка)`,
-                validateInput: (v) => (isNaN(parseFloat(v)) ? "Введите число" : undefined)
-            });
-            if (input === undefined) return;
-            const angleDeg = parseFloat(input);
-            if (isNaN(angleDeg)) return;
-            const rad = (angleDeg * Math.PI) / 180;
-            const newPoint: vec3 = [basePoint[0] + currentLength * Math.cos(rad), basePoint[1] + currentLength * Math.sin(rad), 0];
-            vertices.push(newPoint);
-            await redrawPreview();
-        }
-
         try {
-            while (!closed) {
-                const basePoint = vertices.length > 0 ? vertices[vertices.length - 1] : undefined;
-                const lengthAngle = basePoint ? makeLengthAngleHandler(ctx, basePoint, topStatus) : undefined;
-                if (lengthAngle) topStatus.update("Длина: 0.00   Угол: 0.0°");
+            while (true) {
+                if (mode === "line") {
+                    const { handler, getLast } = makeLengthAngleHandler(ctx, lastPoint, topStatus);
+                    topStatus.update("Длина: 0.00   Угол: 0.0°");
 
-                const pointAlts: AlternativeCommands = basePoint
-                    ? { ...alts, length: "Задать точную длину", angle: "Задать точный угол", exit: "Выход" }
-                    : { ...alts, exit: "Выход" };
+                    const alts: AlternativeCommands = {
+                        undo: "Отменить последнюю точку",
+                        close: "Замкнуть",
+                        width: "Изменить ширину",
+                        color: "Изменить цвет",
+                        length: "Задать точную длину и угол",
+                        arc: "Режим: дуга",
+                        exit: "Выход"
+                    };
 
-                const result = await cadview.getpoint(
-                    vertices.length === 0 ? "Укажите точку" : "Укажите след. точку",
-                    pointAlts,
-                    undefined,
-                    lengthAngle?.handler
-                );
+                    const result = await cadview.getpoint("Следующая точка (Enter — завершить)", alts, undefined, handler);
 
-                if (result === "length" && basePoint && lengthAngle) {
-                    await askExactLength(basePoint, lengthAngle.getLast().angleDeg);
-                    continue;
+                    if (result === "arc") { await commitLinePiece(); mode = "arc"; continue; }
+                    if (result === "undo") { await undoLast(); continue; }
+                    if (result === "width") { await askWidth(); await redrawLinePreview(); continue; }
+                    if (result === "color") { await askColor(); continue; }
+                    if (result === "length") { await askExactLengthAndAngle(getLast().length, getLast().angleDeg); continue; }
+                    if (result === "exit") break;
+                    if (result === "close") {
+                        lineVertices.push(committed[0]?.priorPoint ?? firstPoint);
+                        await commitLinePiece();
+                        break;
+                    }
+                    if (typeof result === "string" || !result) break; // Enter/Escape — обычное завершение
+
+                    lineVertices.push(result);
+                    lastPoint = result;
+                    await redrawLinePreview();
+                } else {
+                    // Режим дуги: сначала точка НА дуге, потом конечная точка.
+                    const throughAlts: AlternativeCommands = { line: "Режим: линия", exit: "Выход" };
+                    const { handler: throughHandler } = makeLengthAngleHandler(ctx, lastPoint, topStatus);
+
+                    const through = await cadview.getpoint("Точка, через которую пройдёт дуга", throughAlts, undefined, throughHandler);
+                    if (through === "line") { mode = "line"; continue; }
+                    if (through === "exit") break;
+                    if (typeof through === "string" || !through) break;
+
+                    const arcStatus = createStatusUpdater(ctx);
+                    const previewArcSegment: DynamicCallback = (dc, _camera, cursor) => {
+                        const arc = arcThrough3Points(lastPoint, through, cursor);
+                        if (arc) {
+                            dc.color = 0xff0000ff; // красная резинка
+                            dc.arcto([arc.center[0], arc.center[1]], arc.radius, arc.angle, arc.span);
+                            dc.stroke(2);
+                            const text = `Радиус: ${arc.radius.toFixed(3)}`;
+                            liveStatus.text = text;
+                            arcStatus.update(text);
+                        }
+                    };
+
+                    const end = await cadview.getpoint(
+                        "Конечная точка дуги",
+                        { cancel: "Отмена" },
+                        undefined,
+                        previewArcSegment
+                    );
+                    arcStatus.dispose();
+
+                    if (typeof end === "string" || !end) {
+                        ctx.showMessage("Отменено", "warning");
+                        continue;
+                    }
+
+                    const arc = arcThrough3Points(lastPoint, through, end);
+                    if (!arc) {
+                        ctx.showMessage("Не удалось построить дугу", "warning");
+                        continue;
+                    }
+
+                    const priorPoint = lastPoint;
+                    const entity = await withEdit(editor, () =>
+                        editor.addArc({ center: arc.center, radius: arc.radius, angle: arc.angle, span: arc.span, color })
+                    );
+                    refresh(cadview);
+                    committed.push({ entity, priorPoint });
+
+                    lastPoint = end;
+                    lineVertices = [lastPoint];
                 }
-
-                if (result === "angle" && basePoint && lengthAngle) {
-                    await askExactAngle(basePoint, lengthAngle.getLast().length);
-                    continue;
-                }
-
-                if (result === "undo") {
-                    vertices.pop();
-                    await redrawPreview();
-                    continue;
-                }
-
-                if (result === "close") {
-                    if (vertices.length >= 3) closed = true;
-                    else ctx.showMessage("Нужно минимум 3 точки, чтобы замкнуть", "warning");
-                    continue;
-                }
-
-                if (result === "width") {
-                    await askWidth();
-                    await redrawPreview();
-                    continue;
-                }
-
-                if (result === "color") {
-                    await askColor();
-                    continue;
-                }
-
-                if (result === "exit") {
-                    exited = true;
-                    break;
-                }
-
-                if (typeof result === "string" || !result) break; // Enter/Escape — обычное завершение
-
-                vertices.push(result);
-                await redrawPreview();
             }
         } catch (e) {
-            console.warn("Рисование отменено:", e);
-            topStatus.dispose();
-            liveStatus.text = "";
-            if (previewEntity) await previewEntity.erase();
-            ctx.showMessage("Отменено", "warning");
-            return;
+            console.warn("Рисование прервано:", e);
         }
 
         topStatus.dispose();
+        liveStatus.text = "";
 
-        if (exited || vertices.length < 2) {
-            if (previewEntity) await previewEntity.erase();
+        try {
+            await commitLinePiece();
+        } catch (e) {
+            console.error("Не удалось сохранить последний кусок полилинии:", e);
+        }
+
+        if (previewEntity) {
+            try { await withEdit(editor, () => previewEntity.erase()); } catch { /* не критично */ }
+        }
+
+        if (committed.length === 0) {
             ctx.showMessage("Отменено", "warning");
             return;
         }
 
-        try {
-            await withEdit(editor, async () => {
-                if (previewEntity) await previewEntity.erase();
-                await editor.addPolyline({ vertices, flags: closed ? 1 : 0, color, width, elevation: 0 });
-            });
-        } catch (e) {
-            console.error("Не удалось создать полилинию:", e);
-            ctx.showMessage("Ошибка при создании полилинии", "error");
-            return;
-        }
-        refresh(cadview);
-
-        liveStatus.text = "";
-        ctx.showMessage(`Готово: ${vertices.length} точек${closed ? ", замкнута" : ""}`);
+        ctx.showMessage(`Полилиния готова: ${committed.length} куск(ов)`);
     },
 
     // Пересечение 

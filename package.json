@@ -49,10 +49,20 @@
         "cmd": "drawN",
         "description": "Правильный N-угольник: число сторон, тип, центр, радиус"
       },
+      "draw_circle_action": {
+        "label": "Нарисовать круг",
+        "cmd": "drawCircle",
+        "description": "Круг по центру и радиусу"
+      },
       "draw_rectangle_action": {
         "label": "Нарисовать прямоугольник",
         "cmd": "drawRectangle",
         "description": "Прямоугольник по двум противоположным углам"
+      },
+      "draw_spline_action": {
+        "label": "Нарисовать сплайн",
+        "cmd": "drawSpline",
+        "description": "Сглаженная кривая через несколько опорных точек"
       },
       "showIntersection_action": {
         "label": "Показать пересечение",
@@ -97,7 +107,9 @@
           { "action": "draw_user_polyline_action" },
           { "action": "draw_arc_action" },
           { "action": "draw_polygon_action" },
+          { "action": "draw_circle_action" },
           { "action": "draw_rectangle_action" },
+          { "action": "draw_spline_action" },
           { "tag": "s" },
           { "action": "showIntersection_action" },
           { "action": "showUnion_action" },
